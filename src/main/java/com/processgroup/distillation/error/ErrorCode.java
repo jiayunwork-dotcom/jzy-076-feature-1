@@ -22,7 +22,9 @@ public enum ErrorCode {
     REFLUX_INSUFFICIENT(HttpStatus.UNPROCESSABLE_ENTITY, "REFLUX_INSUFFICIENT", "回流不足：实际回流比必须大于最小回流比"),
     STRIPPING_FLOW_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "STRIPPING_FLOW_INVALID", "该进料热状态下提馏段气相流量非正，无法构造提馏段操作线"),
     FEED_LINE_PARALLEL(HttpStatus.UNPROCESSABLE_ENTITY, "FEED_LINE_PARALLEL", "q 线与精馏段操作线平行，无法确定进料级交点"),
-    STEP_NOT_CONVERGING(HttpStatus.UNPROCESSABLE_ENTITY, "STEP_NOT_CONVERGING", "逐板阶梯不收敛：达到阶梯数上限或组成不再下降");
+    STEP_NOT_CONVERGING(HttpStatus.UNPROCESSABLE_ENTITY, "STEP_NOT_CONVERGING", "逐板阶梯不收敛：达到阶梯数上限或组成不再下降"),
+    STAGES_BELOW_MINIMUM(HttpStatus.UNPROCESSABLE_ENTITY, "STAGES_BELOW_MINIMUM", "板数不可达：目标理论板数必须大于最少理论板数"),
+    INVERSION_NOT_CONVERGING(HttpStatus.UNPROCESSABLE_ENTITY, "INVERSION_NOT_CONVERGING", "Gilliland 关联反查未收敛");
 
     private final HttpStatus status;
     private final String code;
