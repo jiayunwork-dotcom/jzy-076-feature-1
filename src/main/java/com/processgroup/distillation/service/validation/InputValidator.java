@@ -1,5 +1,7 @@
 package com.processgroup.distillation.service.validation;
 
+import com.processgroup.distillation.domain.GillilandRefluxRequest;
+import com.processgroup.distillation.domain.GillilandStagesRequest;
 import com.processgroup.distillation.domain.ShortcutRequest;
 import com.processgroup.distillation.error.ErrorCode;
 import com.processgroup.distillation.error.ServiceException;
@@ -25,28 +27,81 @@ public class InputValidator {
         }
         Map<String, List<String>> fieldErrors = new LinkedHashMap<>();
 
+        validateColumnSpecification(fieldErrors,
+                req.feedComposition(), req.distillateComposition(), req.bottomsComposition(),
+                req.feedThermalFactor(), req.relativeVolatility());
+
         requireFinitePositive(fieldErrors, "feedFlow", req.feedFlow(),
                 ErrorCode.NON_POSITIVE_FEED_FLOW.message());
-        requireFinite(fieldErrors, "feedThermalFactor", req.feedThermalFactor());
 
-        Double zF = req.feedComposition();
-        Double xD = req.distillateComposition();
-        Double xB = req.bottomsComposition();
+        Double r = req.refluxRatio();
+        if (r == null || !Double.isFinite(r) || r < 0.0) {
+            fieldErrors.put("refluxRatio", List.of(ErrorCode.INVALID_REFLUX_RATIO.message()));
+        }
+
+        raiseIfAnyFieldError(fieldErrors);
+    }
+
+    /**
+     * 校验「给 R 求 N」请求：分离任务列与回流比取值；R 与 Rmin 的工艺关系
+     * （R 必须严格大于 Rmin）由服务层用同一套容差判据把关。
+     */
+    public void validate(GillilandRefluxRequest req) {
+        if (req == null) {
+            throw new ServiceException(ErrorCode.INVALID_INPUT, "请求体为空");
+        }
+        Map<String, List<String>> fieldErrors = new LinkedHashMap<>();
+
+        validateColumnSpecification(fieldErrors,
+                req.feedComposition(), req.distillateComposition(), req.bottomsComposition(),
+                req.feedThermalFactor(), req.relativeVolatility());
+
+        Double r = req.refluxRatio();
+        if (r == null || !Double.isFinite(r) || r < 0.0) {
+            fieldErrors.put("refluxRatio", List.of(ErrorCode.INVALID_REFLUX_RATIO.message()));
+        }
+
+        raiseIfAnyFieldError(fieldErrors);
+    }
+
+    /**
+     * 校验「给 N 求 R」请求：分离任务列与目标板数取值；N 与 Nmin 的工艺关系
+     * （N 必须严格大于 Nmin）由服务层判据把关，因为 Nmin 要现算。
+     */
+    public void validate(GillilandStagesRequest req) {
+        if (req == null) {
+            throw new ServiceException(ErrorCode.INVALID_INPUT, "请求体为空");
+        }
+        Map<String, List<String>> fieldErrors = new LinkedHashMap<>();
+
+        validateColumnSpecification(fieldErrors,
+                req.feedComposition(), req.distillateComposition(), req.bottomsComposition(),
+                req.feedThermalFactor(), req.relativeVolatility());
+
+        requireFinitePositive(fieldErrors, "targetStages", req.targetStages(),
+                "目标理论板数必须为正的有限值");
+
+        raiseIfAnyFieldError(fieldErrors);
+    }
+
+    /**
+     * 分离任务列的共用校验：组成范围/顺序/端点、q 有限、alpha 有限为正。
+     * 三个入口（简捷法全量、Gilliland 两条路径）共用同一套判据，不重复造轮子。
+     */
+    private void validateColumnSpecification(Map<String, List<String>> fieldErrors,
+                                             Double zF, Double xD, Double xB,
+                                             Double q, Double alpha) {
+        requireFinite(fieldErrors, "feedThermalFactor", q);
+
         requireFiniteInUnitRange(fieldErrors, "feedComposition", zF);
         requireFiniteInUnitRange(fieldErrors, "distillateComposition", xD);
         requireFiniteInUnitRange(fieldErrors, "bottomsComposition", xB);
 
-        Double alpha = req.relativeVolatility();
         if (alpha == null || !Double.isFinite(alpha)) {
             fieldErrors.put("relativeVolatility", List.of("相对挥发度缺失或不是有限数值"));
         } else if (alpha <= 0.0) {
             fieldErrors.put("relativeVolatility",
                     List.of(ErrorCode.NON_POSITIVE_VOLATILITY.message()));
-        }
-
-        Double r = req.refluxRatio();
-        if (r == null || !Double.isFinite(r) || r < 0.0) {
-            fieldErrors.put("refluxRatio", List.of(ErrorCode.INVALID_REFLUX_RATIO.message()));
         }
 
         // 组成顺序：馏出液 > 进料 > 釜液（端点 0/1 也不允许，保证 Fenske 对数有定义）
@@ -70,7 +125,9 @@ public class InputValidator {
             fieldErrors.put("bottomsComposition", List.of(
                     ErrorCode.COMPOSITION_OUT_OF_RANGE.message() + "（釜液组成不能取 0 或 1）"));
         }
+    }
 
+    private static void raiseIfAnyFieldError(Map<String, List<String>> fieldErrors) {
         if (!fieldErrors.isEmpty()) {
             ServiceException ex = new ServiceException(ErrorCode.INVALID_INPUT,
                     "存在 " + fieldErrors.size() + " 类字段校验错误");
